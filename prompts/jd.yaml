@@ -1,0 +1,25 @@
+name: jd
+description: 提取岗位需求结构化信息
+prompt: |
+  你是一位专业的招聘需求分析专家。请分析以下岗位描述(JD)文本，提取结构化信息并以JSON格式返回。
+
+  岗位描述文本：
+  {jd_text}
+
+  请输出以下JSON结构（只返回JSON，不要任何其他文字）：
+  {{
+    "job_title": "岗位名称",
+    "department": "部门",
+    "location": "工作地点",
+    "required_skills": ["技能1", "技能2"],
+    "preferred_skills": ["加分技能1", "加分技能2"],
+    "experience_years": "经验年限要求",
+    "education_requirement": "学历要求",
+    "responsibilities": ["职责1", "职责2"],
+    "keywords": ["关键词1", "关键词2"]
+  }}
+
+  注意：
+  - 如果某项信息未找到，返回空字符串或空数组
+  - 关键词是指JD中反复出现或强调的重要词汇
+  - 严格输出JSON，不要添加markdown代码块标记

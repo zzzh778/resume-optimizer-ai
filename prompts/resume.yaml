@@ -1,0 +1,40 @@
+name: resume
+description: 提取简历结构化信息
+prompt: |
+  你是一位专业的简历解析专家。请分析以下简历文本，提取结构化信息并以JSON格式返回。
+
+  简历文本：
+  {resume_text}
+
+  请输出以下JSON结构（只返回JSON，不要任何其他文字）：
+  {{
+    "name": "姓名",
+    "email": "邮箱",
+    "phone": "电话",
+    "summary": "个人简介/自我评价",
+    "work_experience": [
+      {{
+        "company": "公司名称",
+        "position": "职位",
+        "start_date": "开始时间",
+        "end_date": "结束时间",
+        "responsibilities": ["职责1", "职责2"]
+      }}
+    ],
+    "education": [
+      {{
+        "school": "学校名称",
+        "degree": "学位",
+        "major": "专业",
+        "start_date": "开始时间",
+        "end_date": "结束时间"
+      }}
+    ],
+    "skills": ["技能1", "技能2"],
+    "certifications": ["证书1", "证书2"],
+    "languages": ["语言1", "语言2"]
+  }}
+
+  注意：
+  - 如果某项信息未找到，返回空字符串或空数组
+  - 严格输出JSON，不要添加markdown代码块标记

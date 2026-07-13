@@ -1,0 +1,41 @@
+name: analysis
+description: 简历与岗位匹配度分析
+prompt: |
+  你是一位资深的职业顾问和招聘专家。请对比以下简历数据和岗位需求，进行匹配度分析。
+
+  简历数据：
+  {resume_data}
+
+  岗位需求：
+  {jd_data}
+
+  请输出以下JSON结构（只返回JSON，不要任何其他文字）：
+  {{
+    "match_score": 75,
+    "match_summary": "整体匹配度概述",
+    "matched_skills": ["匹配的技能"],
+    "missing_skills": ["缺失的技能"],
+    "skill_gaps": [
+      {{
+        "skill": "技能名称",
+        "importance": "high/medium/low",
+        "suggestion": "如何弥补该技能差距的建议"
+      }}
+    ],
+    "experience_gap": "经验差距分析",
+    "optimization_suggestions": [
+      {{
+        "section": "简历中需要修改的部分",
+        "original": "原文描述（如果有）",
+        "improved": "优化后的建议描述",
+        "reason": "修改原因"
+      }}
+    ],
+    "keyword_recommendations": ["建议在简历中添加的关键词"],
+    "overall_advice": "整体优化建议总结"
+  }}
+
+  注意：
+  - match_score 为0-100的整数
+  - 优化建议要具体、可操作
+  - 严格输出JSON，不要添加markdown代码块标记
