@@ -18,6 +18,33 @@ st.set_page_config(page_title="ResumeOptimizer AI", page_icon="✨", layout="wid
 
 init_db()
 
+# Auto-create admin account on first startup (for cloud deployments)
+import os
+from database import _get_conn
+from auth import hash_password
+
+_admin_email = os.getenv("ADMIN_EMAIL", "admin@resume-ai.com")
+_admin_password = os.getenv("ADMIN_PASSWORD", "admin123")
+_ac = _get_conn()
+_admin_row = _ac.execute("SELECT id FROM users WHERE email = ?", (_admin_email,)).fetchone()
+if not _admin_row:
+    _ac.execute(
+        "INSERT OR IGNORE INTO users (email, password_hash, plan, role) VALUES (?, ?, 'pro', 'admin')",
+        (_admin_email, hash_password(_admin_password)),
+    )
+    _uid = _ac.execute("SELECT id FROM users WHERE email = ?", (_admin_email,)).fetchone()
+    if _uid:
+        from datetime import datetime as _dt
+        _ac.execute(
+            "INSERT OR IGNORE INTO usage (user_id, limit_count, used_count, reset_date) VALUES (?, 999, 0, ?)",
+            (_uid[0], _dt.now().isoformat()),
+        )
+    _ac.commit()
+    _ac.close()
+    print(f"Admin account created: {_admin_email}")
+    print(f"Admin password: {_admin_password}")
+_ac.close()
+
 _CSS = """
 <style>
 .stApp{background-color:#0b1120}
