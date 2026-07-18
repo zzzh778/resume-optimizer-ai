@@ -4,6 +4,8 @@ from openai import OpenAI
 
 from config import DEEPSEEK_API_KEY, DEEPSEEK_BASE_URL, DEEPSEEK_MODEL, LLM_PROVIDER
 
+_token_usage_log = []
+
 
 class LLMError(Exception):
     pass
@@ -29,6 +31,14 @@ class DeepSeekProvider(BaseLLMProvider):
                 messages=[{"role": "user", "content": prompt}],
                 timeout=30,
             )
+            usage = response.usage
+            if usage:
+                _token_usage_log.append({
+                    "model": self._model,
+                    "input_tokens": usage.prompt_tokens or 0,
+                    "output_tokens": usage.completion_tokens or 0,
+                    "total_tokens": usage.total_tokens or 0,
+                })
             return response.choices[0].message.content
         except Exception as e:
             msg = str(e)
@@ -39,6 +49,12 @@ class DeepSeekProvider(BaseLLMProvider):
             if "connection" in msg.lower() or "connect" in msg.lower():
                 raise LLMError("网络连接失败，请检查网络后重试") from e
             raise LLMError(f"AI服务暂时不可用，请稍后重试") from e
+
+
+def pop_token_usage():
+    data = list(_token_usage_log)
+    _token_usage_log.clear()
+    return data
 
 
 def create_llm_provider() -> BaseLLMProvider:
