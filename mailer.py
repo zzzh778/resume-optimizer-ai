@@ -1,14 +1,15 @@
 import os
-import secrets
 
 import requests
 
-RESEND_API_KEY = os.getenv("RESEND_API_KEY", "")
 RESEND_API_URL = "https://api.resend.com/emails"
 
 
 def send_verification_email(to_email: str, code: str) -> tuple[bool, str]:
-    if not RESEND_API_KEY:
+    api_key = os.getenv("RESEND_API_KEY", "")
+    from_email = os.getenv("RESEND_FROM_EMAIL", "onboarding@resend.dev")
+
+    if not api_key:
         print(f"[DEV MODE] Verification code for {to_email}: {code}")
         return True, "[DEV] Code printed to console (no RESEND_API_KEY set)"
 
@@ -16,11 +17,11 @@ def send_verification_email(to_email: str, code: str) -> tuple[bool, str]:
         resp = requests.post(
             RESEND_API_URL,
             headers={
-                "Authorization": f"Bearer {RESEND_API_KEY}",
+                "Authorization": f"Bearer {api_key}",
                 "Content-Type": "application/json",
             },
             json={
-                "from": "ResumeOptimizer <noreply@resume-ai.com>",
+                "from": from_email,
                 "to": [to_email],
                 "subject": "您的邮箱验证码",
                 "html": f"""
