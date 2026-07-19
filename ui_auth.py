@@ -87,10 +87,27 @@ def _render_reg_form():
             # Generate 6-digit code
             code = f"{secrets.randbelow(900000) + 100000}"
             expire = (datetime.now() + timedelta(minutes=10)).isoformat()
-            save_verification_code(email, code, expire)
+            sent_time = datetime.now().isoformat()
+            save_verification_code(email, code, expire, sent_time)
             ok, msg = send_verification_email(email, code)
             if not ok:
-                st.warning(f"邮件发送异常: {msg}，但您可以继续验证")
+                # Send failed, clear the code so it can't be used
+                from database import _get_conn as _gconn
+                _c = _gconn()
+                _c.execute(
+                    "UPDATE users SET verification_code = NULL, verification_expire_time = NULL, "
+                    "verification_attempts = 0 WHERE email = ?",
+                    (email,),
+                )
+                _c.commit()
+                _c.close()
+                st.error(f"验证码发送失败: {msg}，请稍后重试")
+                # Delete the unverified user
+                _c2 = _gconn()
+                _c2.execute("DELETE FROM users WHERE email = ? AND is_verified = 0", (email,))
+                _c2.commit()
+                _c2.close()
+                return
             # Store in session for verify step
             st.session_state.reg_email = email
             st.session_state.reg_code = code
@@ -106,12 +123,23 @@ def _render_reg_form():
 
 
 def _render_verify_code():
-    from database import get_user_by_email as _gube
+    from database import (_get_conn as _gconn, get_user_by_email as _gube,
+                          get_verification_sent_time as _gst)
     email = st.session_state.get("reg_email", "")
+
+    # Check cooldown
+    _sent = _gst(email)
+    _cooldown = 0
+    if _sent:
+        _elapsed = (datetime.now() - datetime.fromisoformat(_sent)).total_seconds()
+        _cooldown = max(0, 60 - int(_elapsed))
+
+    _cooldown_text = f'<p style="text-align:center;color:#fbbf24;font-size:12px;">{_cooldown}秒后可重新发送</p>' if _cooldown > 0 else ""
     st.markdown(
         f"<h2 style='text-align:center;margin-bottom:8px;'>验证邮箱</h2>"
         f"<p style='text-align:center;color:#94a3b8;font-size:14px;'>验证码已发送至<br/>"
-        f"<strong style='color:#f8fafc;'>{email}</strong></p>",
+        f"<strong style='color:#f8fafc;'>{email}</strong></p>"
+        f"{_cooldown_text}",
         unsafe_allow_html=True,
     )
 
@@ -137,14 +165,30 @@ def _render_verify_code():
 
     col1, col2, col3 = st.columns([1, 2, 1])
     with col2:
-        if st.button("重新发送验证码", use_container_width=True):
+        _disabled = _cooldown > 0
+        if st.button(
+            "重新发送验证码",
+            use_container_width=True,
+            disabled=_disabled,
+            help=f"请等待{_cooldown}秒" if _disabled else None,
+        ):
             code = f"{secrets.randbelow(900000) + 100000}"
             expire = (datetime.now() + timedelta(minutes=10)).isoformat()
-            save_verification_code(email, code, expire)
-            send_verification_email(email, code)
-            st.session_state.reg_code = code
-            st.session_state.reg_expire = expire
-            st.success("验证码已重新发送")
+            sent_time = datetime.now().isoformat()
+            save_verification_code(email, code, expire, sent_time)
+            ok, msg = send_verification_email(email, code)
+            if ok:
+                st.session_state.reg_code = code
+                st.session_state.reg_expire = expire
+                st.success("验证码已重新发送")
+            else:
+                st.error(f"发送失败: {msg}")
+                _c = _gconn()
+                _c.execute(
+                    "UPDATE users SET verification_code = NULL WHERE email = ?", (email,)
+                )
+                _c.commit()
+                _c.close()
             st.rerun()
         if st.button("返回重新填写", use_container_width=True):
             st.session_state.reg_step = "form"

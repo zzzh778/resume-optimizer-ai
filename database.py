@@ -28,6 +28,8 @@ def init_db():
         "is_verified INTEGER NOT NULL DEFAULT 1",
         "verification_code TEXT",
         "verification_expire_time TIMESTAMP",
+        "verification_attempts INTEGER NOT NULL DEFAULT 0",
+        "verification_sent_time TIMESTAMP",
     ]:
         try:
             conn.execute(f"ALTER TABLE users ADD COLUMN {col}")
@@ -149,11 +151,14 @@ def is_user_verified(user_id: int) -> bool:
     return bool(row and row["is_verified"])
 
 
-def save_verification_code(email: str, code: str, expire_time: str) -> bool:
+def save_verification_code(email: str, code: str, expire_time: str, sent_time: str = "") -> bool:
     conn = _get_conn()
+    from datetime import datetime as _dt
+    st = sent_time or _dt.now().isoformat()
     cur = conn.execute(
-        "UPDATE users SET verification_code = ?, verification_expire_time = ? WHERE email = ?",
-        (code, expire_time, email),
+        "UPDATE users SET verification_code = ?, verification_expire_time = ?, "
+        "verification_attempts = 0, verification_sent_time = ? WHERE email = ?",
+        (code, expire_time, st, email),
     )
     ok = cur.rowcount > 0
     conn.commit()
@@ -173,20 +178,43 @@ def verify_email_code(email: str, code: str) -> tuple[bool, str]:
         conn.close()
         return False, "未发送验证码"
     if row["verification_code"] != code:
+        new_attempts = (row["verification_attempts"] or 0) + 1
+        conn.execute(
+            "UPDATE users SET verification_attempts = ? WHERE email = ?",
+            (new_attempts, email),
+        )
+        if new_attempts >= 5:
+            conn.execute(
+                "UPDATE users SET verification_code = NULL, verification_expire_time = NULL WHERE email = ?",
+                (email,),
+            )
+            conn.commit()
+            conn.close()
+            return False, "验证码错误次数过多，请重新发送"
+        conn.commit()
         conn.close()
-        return False, "验证码错误"
+        remaining = 5 - new_attempts
+        return False, f"验证码错误（剩余{remaining}次机会）"
     from datetime import datetime as dt
     now = dt.now().isoformat()
     if row["verification_expire_time"] and row["verification_expire_time"] < now:
         conn.close()
         return False, "验证码已过期"
     conn.execute(
-        "UPDATE users SET is_verified = 1, verification_code = NULL, verification_expire_time = NULL WHERE email = ?",
+        "UPDATE users SET is_verified = 1, verification_code = NULL, "
+        "verification_expire_time = NULL, verification_attempts = 0 WHERE email = ?",
         (email,),
     )
     conn.commit()
     conn.close()
     return True, "验证成功"
+
+
+def get_verification_sent_time(email: str):
+    conn = _get_conn()
+    row = conn.execute("SELECT verification_sent_time FROM users WHERE email = ?", (email,)).fetchone()
+    conn.close()
+    return row["verification_sent_time"] if row else None
 
 
 # ---- Analysis History CRUD ----
