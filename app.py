@@ -6,7 +6,7 @@ from pathlib import Path
 import streamlit as st
 
 from core.parser import extract_text
-from database import init_db, get_usage
+from database import init_db, get_usage, is_user_verified
 from usage_tracker import get_remaining
 from middleware import run_with_usage_check
 from ui_auth import render_login, render_register
@@ -645,6 +645,8 @@ elif page in ("main", "profile", "history", "admin"):
                 st.warning("⚠️ 请输入岗位描述（JD）")
             elif len(jd_text.strip()) < 20:
                 st.warning("⚠️ 岗位描述过短，请补充完整的 JD 信息")
+            elif not is_user_verified(st.session_state.user_id):
+                st.error("⚠️ 请先完成邮箱验证")
             else:
                 st.session_state.analyzing = True
                 st.session_state.result = None

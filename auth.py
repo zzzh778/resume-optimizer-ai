@@ -16,7 +16,7 @@ def register(email: str, password: str) -> str:
     if existing:
         return "该邮箱已注册"
     password_hash = hash_password(password)
-    create_user(email, password_hash)
+    create_user(email, password_hash, verified=False)
     return ""
 
 

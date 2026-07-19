@@ -22,7 +22,21 @@ def init_db():
             plan TEXT NOT NULL DEFAULT 'free',
             role TEXT NOT NULL DEFAULT 'user',
             created_at TIMESTAMP NOT NULL DEFAULT CURRENT_TIMESTAMP
-        );
+        );""")
+    # Migration: add verification columns if not exist
+    for col in [
+        "is_verified INTEGER NOT NULL DEFAULT 1",
+        "verification_code TEXT",
+        "verification_expire_time TIMESTAMP",
+    ]:
+        try:
+            conn.execute(f"ALTER TABLE users ADD COLUMN {col}")
+        except Exception:
+            pass
+    # Existing users are considered verified
+    conn.execute("UPDATE users SET is_verified = 1 WHERE is_verified IS NULL")
+    conn.commit()
+    conn.executescript("""
 
         CREATE TABLE IF NOT EXISTS usage (
             id INTEGER PRIMARY KEY AUTOINCREMENT,
@@ -61,11 +75,11 @@ def init_db():
     conn.close()
 
 
-def create_user(email: str, password_hash: str) -> int:
+def create_user(email: str, password_hash: str, verified: bool = True) -> int:
     conn = _get_conn()
     cur = conn.execute(
-        "INSERT INTO users (email, password_hash) VALUES (?, ?)",
-        (email, password_hash),
+        "INSERT INTO users (email, password_hash, is_verified) VALUES (?, ?, ?)",
+        (email, password_hash, 1 if verified else 0),
     )
     user_id = cur.lastrowid
     conn.execute(
@@ -123,6 +137,56 @@ def get_remaining_count(user_id: int) -> int:
     if not row:
         return 0
     return max(0, row["limit_count"] - row["used_count"])
+
+
+# ---- Verification CRUD ----
+
+
+def is_user_verified(user_id: int) -> bool:
+    conn = _get_conn()
+    row = conn.execute("SELECT is_verified FROM users WHERE id = ?", (user_id,)).fetchone()
+    conn.close()
+    return bool(row and row["is_verified"])
+
+
+def save_verification_code(email: str, code: str, expire_time: str) -> bool:
+    conn = _get_conn()
+    cur = conn.execute(
+        "UPDATE users SET verification_code = ?, verification_expire_time = ? WHERE email = ?",
+        (code, expire_time, email),
+    )
+    ok = cur.rowcount > 0
+    conn.commit()
+    conn.close()
+    return ok
+
+
+def verify_email_code(email: str, code: str) -> tuple[bool, str]:
+    conn = _get_conn()
+    row = conn.execute(
+        "SELECT * FROM users WHERE email = ?", (email,)
+    ).fetchone()
+    if not row:
+        conn.close()
+        return False, "用户不存在"
+    if row["verification_code"] is None:
+        conn.close()
+        return False, "未发送验证码"
+    if row["verification_code"] != code:
+        conn.close()
+        return False, "验证码错误"
+    from datetime import datetime as dt
+    now = dt.now().isoformat()
+    if row["verification_expire_time"] and row["verification_expire_time"] < now:
+        conn.close()
+        return False, "验证码已过期"
+    conn.execute(
+        "UPDATE users SET is_verified = 1, verification_code = NULL, verification_expire_time = NULL WHERE email = ?",
+        (email,),
+    )
+    conn.commit()
+    conn.close()
+    return True, "验证成功"
 
 
 # ---- Analysis History CRUD ----
